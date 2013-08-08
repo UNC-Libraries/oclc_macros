@@ -1,0 +1,199 @@
+'MacroName:aacr_to_rda_ebook_nonpcc
+'MacroDescription: Change AACR2 ebook record to RDA
+
+'Derived from: 
+'MacroName:BIBCO
+'MacroDescription: Sets Elvl to blank, srce to "c" (unless it's already blank), adds 042 with
+'"pcc" if necessary, and changes last 090 to "050  4"
+'June 13, 2013
+
+Sub Main
+
+   Dim CS As Object
+   Set CS = CreateObject("Connex.Client")
+   
+      
+   If CS.IsOnline = False Then
+      CS.Logon "", "", ""
+   End If
+   
+   BOOL = CS.InsertMode
+   
+   CS.GetFixedField "Srce", sField
+   If sField <> "" Then
+      CS.SetFixedField "Srce", "d"   
+   End If
+   
+   CS.GetFixedField "Desc", sField
+   If sField <> "i" Then
+      CS.SetFixedField "Desc", "i"   
+   End If
+
+'Add $e rda to 040 if necessary
+
+rda=Chr(223) + "e " & "rda"
+subc=Chr(223) + "c "
+
+If CS.GetField ("040", 1, s040) Then
+   If instr (s040, rda) =False Then
+      p=instr(s040, subc)
+      s040 = left (s040, p-1) + rda & mid (s040, p)
+      CS.DeleteField "040", 1
+      CS.SetField 99, s040
+   End if  
+End if   
+
+'Add lang of cataloging to 040 if necessary
+
+catlang=Chr(223)+ "b " & "eng"
+If CS.GetField ("040", 1, s040) Then
+   If instr (s040, catlang)=False Then
+      p=instr(s040, rda)
+      s040 = left (s040, p-2) + catlang & mid (s040, p)
+      CS.DeleteField "040", 1
+      CS.SetField 99, s040
+   End if  
+End if   
+
+'If there is a 100, 110, or 111 field, add "$e author" at end
+'**********************************************
+relator = Chr(223) & "e author"   
+
+If CS.GetFieldUnicode ("1[0-1][0-1]", 2, s1xx) Then
+    If Instr(s1xx, relator) = False Then
+       tag= left (s1xx, 5)
+       s1xx= mid (s1xx,6)
+       x=len (s1xx)
+       y = Right (s1xx,1)
+       If y="."  Then
+          s1xx = left (s1xx, x-1) & ", " & Chr(223) & "e author."
+       Elseif y="-" Then
+          s1xx = s1xx & Chr(223) & "e author."
+       Else  
+         s1xx = s1xx & ", " & Chr(223) & "e author."
+       End if
+     End if    
+     CS.SetField 2, tag & s1xx 
+End if
+
+'Remove GMD from 245
+'**********************************************
+If CS.GetFieldUnicode ("245", 1, s245) Then 
+  If InStr(s245, "[electronic resource]") = True Then
+    gmdpos = InStr(s245, "[electronic resource]") - 4
+    gmdend = gmdpos + 26
+    b245 = Mid$(s245, 1, gmdpos)
+    e245 = Mid$(s245, gmdend)
+    CS.SetField 1, b245 & e245
+  End If
+End If
+
+'If CS.GetField ("066",1, s066) Then
+  If CS.GetFieldunicode ("1[0-1][0-1]", 1, s1xxu) Then
+     If Instr(s1xxu, "e author") = False Then
+       tag= left (s1xxu, 5)
+       tag1 =left (s1xxu,3)
+       s1xxu= mid (s1xxu,6)
+       x=len (s1xxu)
+       y = Right (s1xxu,1)
+       If y="."  Then
+          s1xxu = left (s1xxu, x-1) & ", " & Chr(223) & "e author."
+       Elseif y="-" Then
+          s1xxu = s1xxu & Chr(223) & "e author."
+       Else  
+         s1xxu = s1xxu & ", " & Chr(223) & "e author."
+       End if
+     End if  
+      ' CS.Deletefield tag1, 1
+       CS.SetField 1, tag & s1xxu
+  End if     
+'End if
+
+
+'If 260 has copyright date change to brackets, then change 260 to 264
+'********************************************************************
+
+If CS.GetField ("066",1, s066) Then
+  If CS.GetFieldunicode ("260", 1, s260u) Then
+  'msgbox s260u 
+      i=InStr(s260u,"c c")+2
+      If mid (s260u,i,1 ) = "c" then
+          s260u = left (s260u,i-1) & "[" & mid (s260u,i+1,4) & "]"    
+      End if
+      s264u = "264 1" & mid (s260u, 5)
+      CS.DeleteField "260",1
+      CS.SetField 1, s264u
+      j=2
+  End if
+End if  
+
+If CS.GetField ("260", 1, s260) Then 
+      i=InStr(s260,subc)+3
+      If mid (s260,i,1 ) = "c" then
+          s260 = left (s260,i-1) & "[" & mid (s260,i+1,4) & "]"    
+      End if
+      s264 = "264 1" & mid (s260, 5)
+      'msgbox s264
+      CS.DeleteField "260",1
+      CS.SetFieldLine 99, s264
+      j=2
+End if
+  
+  
+'Add 3xx fields
+'*********************
+
+subb=Chr(223) + "b "
+sub2 = Chr(223) + "2 "
+If CS.GetField ("336", 1, s336) =False Then
+   CS.AddField 1, "336  text " & subb & "txt" & sub2 & "rdacontent"
+End if
+If CS.GetField ("337", 1, s337) =False Then   
+   CS.AddField 1, "337  computer " & subb & "c" & sub2 & "rdamedia"
+End if
+If CS.GetField ("338", 1, s338) =False Then
+   CS.AddField 1, "338  online resource " & subb & "cr" & sub2 & "rdacarrier"
+End if
+
+'Check for series
+'********************
+
+If CS.GetField ("490", 1, s490) =False Then
+   Bool=CS.ReplaceTextAll("cm.", "cm", TRUE)
+End if   
+
+'other miscellaneous replacements
+'*********************************
+Bool=CS.ReplaceTextAll(" et al.", " and others", TRUE)
+Bool=CS.ReplaceTextAll(" approx.", " approximately", TRUE)
+Bool=CS.ReplaceTextAll(" t.p.", " title page", TRUE)
+Bool=CS.ReplaceTextAll(" p.", " pages", TRUE)
+Bool=CS.ReplaceTextAll(" ed.", " edition", TRUE)
+Bool=CS.ReplaceTextAll(" enl.", " enlarged", TRUE)
+Bool=CS.ReplaceTextAll(" rev.", " revised", TRUE)
+Bool=CS.ReplaceTextAll(" col.", " color", TRUE)
+Bool=CS.ReplaceTextAll(" ill.", " illustrations", TRUE)
+Bool=CS.ReplaceTextAll(" illus.", " illustrations", TRUE)
+Bool=CS.ReplaceTextAll(" facsim.", " facsimile", TRUE)
+Bool=CS.ReplaceTextAll(" facsims.", " facsimiles", TRUE)
+Bool=CS.ReplaceTextAll(" geneal.", " genealogical", TRUE)
+Bool=CS.ReplaceTextAll(" photo.", " photograph", TRUE)
+Bool=CS.ReplaceTextAll(" photos.", " photographs", TRUE)
+Bool=CS.ReplaceTextAll(" port.", " portrait", TRUE)
+Bool=CS.ReplaceTextAll(" ports.", " portraits", TRUE)
+Bool=CS.ReplaceTextAll(" pref.", " preface", TRUE)
+Bool=CS.ReplaceTextAll("s.n.", "publisher not identified", TRUE)
+Bool=CS.ReplaceTextAll("s.l.", "Place of publication not identified", TRUE)
+Bool=CS.ReplaceTextAll(" v.", " volume", TRUE)
+Bool=CS.ReplaceTextAll("pbk.", "paperback", TRUE)
+
+'German
+Bool=CS.ReplaceTextAll("Aufl.", "Auflage.", TRUE)
+Bool=CS.ReplaceTextAll("hrsg.", "herausgegeben", TRUE)
+Bool=CS.ReplaceTextAll("Inhaltsverzeichnis", "Table of contents", TRUE)
+Bool=CS.ReplaceTextAll("Inhaltsverzeichnis", "Table of contents", TRUE)
+Bool=CS.ReplaceTextAll("Verl.", "Verlag", TRUE)
+
+CS.Reformat 
+  
+End Sub
