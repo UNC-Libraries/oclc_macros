@@ -114,8 +114,26 @@ Sub SetFields
   
   bool = CS.SetFixedField("Desc", desc)
   
+  'Full level (authenticated) --> Full-level input by OCLC participants
   If elvl = "" Then
     bool = CS.SetFixedField("ELvl", "I")
+
+  'Minimal level --> Less-than-full input by OCLC participants  
+  ElseIf elvl = "7" Then  
+    bool = CS.SetFixedField("ELvl", "K")
+
+  'Prepublication (CIP) level --> Less-than-full input by OCLC participants  
+  ElseIf elvl = "8" Then
+    bool = CS.SetFixedField("ELvl", "K")
+    
+  'Full-level input added from a batch process --> Full-level input by OCLC participants  
+  ElseIf elvl = "L" Then
+    bool = CS.SetFixedField("ELvl", "I")
+
+  'Less-than-full added from a batch process --> Less-than-full input by OCLC participants
+  ElseIf elvl = "M" Then
+    bool = CS.SetFixedField("ELvl", "K")
+        
   Else
     bool = CS.SetFixedField("ELvl", elvl)
   End If
@@ -459,5 +477,9 @@ Sub Main
     If ffo > 0 Then
       CS.FixedFieldPosition = ffo
     End If
-    End If
+   End If
+   
+  'Set view of fixed field to top to use get/set
+  CS.FixedFieldPosition = 1
+
 End Sub
